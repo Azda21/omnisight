@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Diff{% endblock %}
+
+{% block content %}
+<div class="diff-page">
+    <h1>{{ t('diff.title') }}</h1>
+    <p class="text-muted">Compare the two most recent completed scans of a target to see what changed.</p>
+
+    <div class="search-bar">
+        <form action="/diff" method="get" class="search-form-inline">
+            <input type="text" name="targets" value="{{ targets }}" placeholder="Target spec (must match a scanned target exactly, e.g. 127.0.0.1)">
+            <button type="submit" class="btn btn-primary">Compare</button>
+        </form>
+    </div>
+
+    {% if diff %}
+    <div class="diff-meta">
+        <span class="text-muted">From <code>{{ diff.from.name }}</code> ({{ diff.from.id[:8] }})</span>
+        <span class="diff-arrow">&rarr;</span>
+        <span class="text-muted">To <code>{{ diff.to.name }}</code> ({{ diff.to.id[:8] }})</span>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" style="color:var(--success)">+{{ diff.summary.ports_opened }}</div><div class="stat-label">{{ t('diff.opened') }}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--error)">-{{ diff.summary.ports_closed }}</div><div class="stat-label">{{ t('diff.closed') }}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--warning)">{{ diff.summary.services_changed }}</div><div class="stat-label">{{ t('diff.changed') }}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--warning)">{{ diff.summary.findings_new }}</div><div class="stat-label">{{ t('diff.new_findings') }}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--error)">{{ diff.summary.cves_new }}</div><div class="stat-label">{{ t('diff.new_cves') }}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--success)">{{ diff.summary.findings_resolved }}</div><div class="stat-label">{{ t('diff.resolved') }}</div></div>
+    </div>
+
+    {% if diff.deltas %}
+        {% for d in diff.deltas %}
+        <div class="section-card">
+            <h3>{{ d.ip }}</h3>
+            {% if d.new_ports %}
+            <div class="diff-row"><span class="diff-label diff-add">Opened</span>
+                {% for p in d.new_ports %}<span class="diff-port diff-add">{{ p }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if d.closed_ports %}
+            <div class="diff-row"><span class="diff-label diff-del">Closed</span>
+                {% for p in d.closed_ports %}<span class="diff-port diff-del">{{ p }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if d.changed_services %}
+            <div class="diff-row"><span class="diff-label diff-chg">Changed</span>
+                <div class="diff-changes">
+                {% for c in d.changed_services %}
+                    <div class="diff-change">:{{ c.port }} <code class="diff-del">{{ c.old or 'none' }}</code> &rarr; <code class="diff-add">{{ c.new or 'none' }}</code></div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if d.new_findings %}
+            <div class="diff-row"><span class="diff-label diff-del">New Risk</span>
+                <div class="diff-changes">
+                {% for f in d.new_findings %}<div class="finding-tag">&#9888; :{{ f.port }} {{ f.finding }}</div>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if d.new_cves %}
+            <div class="diff-row"><span class="diff-label diff-del">New CVE</span>
+                {% for c in d.new_cves %}<span class="cve-tag cve-high">:{{ c.port }} {{ c.cve }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if d.resolved_findings %}
+            <div class="diff-row"><span class="diff-label diff-add">Resolved</span>
+                <div class="diff-changes">
+                {% for f in d.resolved_findings %}<div class="text-muted">&#10003; :{{ f.port }} {{ f.finding }}</div>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-results"><p>No changes between the two most recent scans.</p></div>
+    {% endif %}
+
+    {% elif targets %}
+    <div class="no-results"><p>Need at least two completed scans of <code>{{ targets }}</code> to diff. Run it again (or schedule it under Monitor).</p></div>
+    {% endif %}
+</div>
+{% endblock %}

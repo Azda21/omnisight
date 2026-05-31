@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+
+{% block content %}
+<div class="search-page">
+    <div class="source-tabs">
+        <a href="/search?q={{ query|urlencode }}&source=local" class="source-tab {% if source == 'local' %}active{% endif %}">🌍 Global Veritabanımız (Keşfedilenler)</a>
+        <a href="/search?q={{ query|urlencode }}&source=live" class="source-tab {% if source == 'live' %}active{% endif %}">🌐 İnternette Canlı Tara (IP/Ağ)</a>
+    </div>
+    <div class="search-bar">
+        <form action="/search" method="get" class="search-form-inline">
+            <input type="text" name="q" value="{{ query }}" placeholder="{% if source == 'live' %}IP veya Ağ Aralığı girin (ör. 8.8.8.8, 192.168.1.0/24){% else %}Ara: camera, port:443, country:TR...{% endif %}" autofocus>
+            <input type="hidden" name="source" value="{{ source }}">
+            <button type="submit" class="btn btn-primary">{% if source == 'live' %}Canlı Tara{% else %}Ara{% endif %}</button>
+        </form>
+    </div>
+
+    {% if source == 'live' %}
+        {% if not query %}
+        <div class="demo-banner">
+            🌐 <strong>Canlı İnternet Taraması</strong><br>
+            OmniSight'ın güçlü tarama motorunu (TCP SYN/Connect, Deep Probe, Banner Grabber) kullanarak hedefleri <strong>gerçek zamanlı</strong> tarayın. Bir IP adresi veya CIDR bloğu girerek hemen başlayabilirsiniz.
+        </div>
+        {% elif results.get('error') %}
+        <div class="demo-banner">⚠️ Tarama başlatılamadı: {{ results.error }}</div>
+        {% else %}
+        <div class="matched-category">
+            <span class="mc-icon">⚡</span>
+            <div><div class="mc-label">Canlı Tarama Başlatıldı</div>
+            <div class="mc-desc">Hedef: {{ query }}. Tarama arka planda sürüyor. Sonuçlar geldikçe Yerel Taramalar (Arşiv) sekmesinde görünecektir. Taramayı takip etmek için <a href="javascript:void(0)" onclick="openScanModal(); pollScanStatus('{{ results.session_id }}');">buraya tıklayın</a>.</div></div>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    {% if matched_categories %}
+        {% for mc in matched_categories %}
+        <div class="matched-category">
+            <span class="mc-icon">{{ mc.icon }}</span>
+            <div>
+                <div class="mc-label">Showing {{ mc.label }}</div>
+                <div class="mc-desc">{{ mc.description }} &middot; matched by port, vendor &amp; banner signatures</div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if filters %}
+    <div class="active-filters">
+        {% for key, val in filters.items() %}
+        <span class="filter-tag">
+            {{ key }}: {{ val }}
+            <a href="?q={{ query }}{% for k2, v2 in filters.items() %}{% if k2 != key %}&{{ k2 }}={{ v2 }}{% endif %}{% endfor %}">&times;</a>
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if source != 'live' or results.get('results') %}
+    <div class="results-info">
+        <span>{{ results.total|default(0) }} {{ t('search.results_found') }}</span>
+        {% if results.pages and results.pages > 1 %}
+        <span class="text-muted">{{ t('search.page') }} {{ results.page }} {{ t('search.of') }} {{ results.pages }}</span>
+        {% endif %}
+    </div>
+
+    <div class="results-list">
+        {% for r in results.get('results', []) %}
+        <div class="result-card">
+            <div class="result-header">
+                <a href="/host/{{ r.ip }}" class="result-ip">{{ r.ip }}</a>
+                <span class="result-port">:{{ r.port }}/{{ r.protocol }}</span>
+                {% if r.country_code %}
+                <span class="badge badge-info">{{ r.country_code }}</span>
+                {% endif %}
+                {% if r.service %}
+                <span class="badge badge-primary">{{ r.service }}</span>
+                {% endif %}
+                {% if r.get('access_level') %}
+                <span class="badge access-level access-{{ r.access_level }}" data-ip="{{ r.ip }}" data-port="{{ r.port }}">{{ r.access_level }}</span>
+                {% endif %}
+                {% if r.get('_risk') %}
+                <span class="badge risk-badge risk-{{ r._risk.severity }}" title="{{ r._risk.reasons | join('; ') }}">{{ r._risk.severity_label }} {{ r._risk.score }}</span>
+                {% endif %}
+                {% if r.session_id == 'demo' %}
+                <span class="badge badge-demo" title="Bu sahte örnek veridir — gerçekte bu adreste cihaz yoktur, bağlanılamaz.">ÖRNEK</span>
+                {% endif %}
+            </div>
+            <div class="result-body">
+                {% if r.product %}
+                <div class="result-meta">
+                    <span class="meta-label">Product:</span>
+                    <span>{{ r.product }}{% if r.version %} {{ r.version }}{% endif %}</span>
+                </div>
+                {% endif %}
+                {% if r.banner %}
+                <div class="result-banner">
+                    <pre>{{ r.banner[:300] }}</pre>
+                </div>
+                {% endif %}
+                {% if r.get('technologies') %}
+                <div class="result-techs">
+                    {% for tech in r.technologies %}
+                    <span class="tech-tag">{{ tech }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if r.get('findings') %}
+                <div class="result-findings">
+                    {% for finding in r.findings %}
+                    <span class="finding-tag">&#9888; {{ finding }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if r.get('cves') %}
+                <div class="result-findings">
+                    {% for cve in r.cves %}
+                    <span class="cve-tag cve-{{ (cve.severity or 'info') | lower }}">{{ cve.id }} ({{ cve.score }})</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if r.get('_risk') and r._risk.remediations %}
+                <details class="risk-advice">
+                    <summary>{{ r._risk.severity_label }} risk — nasıl düzeltilir?</summary>
+                    <ul>
+                        {% for fix in r._risk.remediations %}<li>{{ fix }}</li>{% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+                {% if r.as_org %}
+                <div class="result-meta">
+                    <span class="meta-label">ASN:</span>
+                    <span>{{ r.as_org }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% if r.get('_access') %}
+            <div class="result-access">
+                {% if r.session_id == 'demo' %}
+                <span class="demo-note">&#9888; Örnek veri — bağlanılamaz, yalnızca gösterim</span>
+                {% else %}
+                <button class="access-btn verify-btn" onclick="verifyAccess('{{ r.ip }}', {{ r.port }}, '{{ r.service }}', this)">
+                    &#9889; Erişimi Doğrula
+                </button>
+                {% endif %}
+                {% for m in r._access %}
+                    {% if m.openable and r.session_id != 'demo' %}
+                    <a href="{{ m.value }}" target="_blank" rel="noopener" class="access-btn access-open"
+                       title="{{ m.hint }}">&#128279; {{ m.label }}{% if m.tool %} <span class="tool-badge">{{ m.tool }}</span>{% endif %}</a>
+                    {% else %}
+                    <button class="access-btn" title="{{ m.hint }}"
+                            onclick="copyToClipboard('{{ m.value }}'); event.stopPropagation();">
+                        &#128203; {{ m.label }}{% if m.tool %} <span class="tool-badge">{{ m.tool }}</span>{% endif %}
+                    </button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="result-footer">
+                <span class="text-muted">{{ r.city }}{% if r.city and r.country %}, {% endif %}{{ r.country }}</span>
+                <span class="text-muted">{{ r.latency_ms | round(1) }}ms</span>
+            </div>
+        </div>
+        {% else %}
+        {% if source != 'live' %}
+        <div class="no-results">
+            <p>{{ t('search.no_results') }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    {% if results.pages and results.pages > 1 %}
+    <div class="pagination">
+        {% if results.page > 1 %}
+        <a href="?q={{ query }}&source={{ source }}&page={{ results.page - 1 }}{% for k, v in filters.items() %}&{{ k }}={{ v }}{% endfor %}" class="btn btn-outline btn-sm">{{ t('search.prev') }}</a>
+        {% endif %}
+
+        {% for p in range(1, results.pages + 1) %}
+            {% if p == results.page %}
+            <span class="btn btn-primary btn-sm">{{ p }}</span>
+            {% elif p <= 3 or p > results.pages - 3 or (p >= results.page - 2 and p <= results.page + 2) %}
+            <a href="?q={{ query }}&source={{ source }}&page={{ p }}{% for k, v in filters.items() %}&{{ k }}={{ v }}{% endfor %}" class="btn btn-outline btn-sm">{{ p }}</a>
+            {% elif p == 4 or p == results.pages - 3 %}
+            <span class="text-muted">...</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if results.page < results.pages %}
+        <a href="?q={{ query }}&source={{ source }}&page={{ results.page + 1 }}{% for k, v in filters.items() %}&{{ k }}={{ v }}{% endfor %}" class="btn btn-outline btn-sm">{{ t('search.next') }}</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

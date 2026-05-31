@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}{{ ip }}{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <h1>{{ ip }}</h1>
+        {% if dns and dns.reverse_dns %}
+        <p class="text-muted">{{ dns.reverse_dns }}</p>
+        {% endif %}
+    </div>
+
+    {% if host_risk and host_risk.score %}
+    <div class="host-risk-banner host-risk-{{ host_risk.severity }}">
+        <div class="host-risk-score">{{ host_risk.score }}</div>
+        <div>
+            <div style="font-weight:700;font-size:1.1em;">{{ host_risk.severity_label }} risk</div>
+            <div class="text-muted" style="font-size:0.88em;">{{ host_risk.services }} açık servis · en kritik: {{ host_risk.worst.reasons[0] if host_risk.worst.reasons else '' }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="detail-grid">
+        <!-- GeoIP Info -->
+        <div class="info-card">
+            <h3>{{ t('detail.location') }}</h3>
+            <div class="info-rows">
+                <div class="info-row"><span>Country</span><span>{{ geo.country }} ({{ geo.country_code }})</span></div>
+                <div class="info-row"><span>City</span><span>{{ geo.city }}</span></div>
+                <div class="info-row"><span>Region</span><span>{{ geo.region }}</span></div>
+                <div class="info-row"><span>Timezone</span><span>{{ geo.timezone }}</span></div>
+                <div class="info-row"><span>Coordinates</span><span>{{ geo.latitude }}, {{ geo.longitude }}</span></div>
+            </div>
+        </div>
+
+        <!-- Network Info -->
+        <div class="info-card">
+            <h3>{{ t('detail.network') }}</h3>
+            <div class="info-rows">
+                <div class="info-row"><span>ASN</span><span>AS{{ geo.asn }}</span></div>
+                <div class="info-row"><span>Organization</span><span>{{ geo.as_org }}</span></div>
+                <div class="info-row"><span>Reverse DNS</span><span>{{ dns.reverse_dns or '-' }}</span></div>
+                {% if dns.hostnames %}
+                <div class="info-row"><span>Hostnames</span><span>{{ dns.hostnames | join(', ') }}</span></div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- WHOIS -->
+        <div class="info-card">
+            <h3>WHOIS</h3>
+            <div class="info-rows">
+                <div class="info-row"><span>Organization</span><span>{{ whois.org or '-' }}</span></div>
+                <div class="info-row"><span>Country</span><span>{{ whois.country or '-' }}</span></div>
+                <div class="info-row"><span>Registrar</span><span>{{ whois.registrar or '-' }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    {% if shodan_view %}
+    <div class="section-card">
+        <h3>🌐 Shodan'a göre (tüm internetin gördüğü)</h3>
+        <div class="info-rows">
+            {% if shodan_view.ports %}
+            <div class="info-row"><span>Açık portlar</span><span>{{ shodan_view.ports | join(', ') }}</span></div>
+            {% endif %}
+            {% if shodan_view.tags %}
+            <div class="info-row"><span>Etiketler</span><span>{% for tg in shodan_view.tags %}<span class="tech-tag">{{ tg }}</span> {% endfor %}</span></div>
+            {% endif %}
+            {% if shodan_view.cves %}
+            <div class="info-row"><span>Bilinen CVE</span><span>{% for c in shodan_view.cves %}<span class="cve-tag cve-high">{{ c.id }}</span> {% endfor %}</span></div>
+            {% endif %}
+        </div>
+        <p class="text-muted" style="font-size:0.78em;margin-top:8px;">Ücretsiz Shodan InternetDB'den — senin taramanla karşılaştır.</p>
+    </div>
+    {% endif %}
+
+    <!-- Open Ports -->
+    <div class="section-card">
+        <h3>{{ t('detail.open_ports') }} ({{ records | length }})</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Port</th>
+                    <th>Protocol</th>
+                    <th>Service</th>
+                    <th>Product</th>
+                    <th>Version</th>
+                    <th>Banner</th>
+                    <th>Latency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td><strong>{{ r.port }}</strong></td>
+                    <td>{{ r.protocol }}</td>
+                    <td><span class="badge badge-primary">{{ r.service or '-' }}</span></td>
+                    <td>{{ r.product or '-' }}</td>
+                    <td>{{ r.version or '-' }}</td>
+                    <td><code class="banner-preview">{{ r.banner[:100] if r.banner else '-' }}</code></td>
+                    <td>{{ r.latency_ms | round(1) if r.latency_ms else '-' }}ms</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- How to connect -->
+    <div class="section-card">
+        <h3>{{ t('detail.how_connect') }}</h3>
+        {% set is_demo = records and records[0].session_id == 'demo' %}
+        {% if is_demo %}
+        <div class="demo-banner">&#9888; Bu bir <strong>örnek (demo) kayıttır</strong> — bu adreste gerçekte cihaz yoktur, bağlantı çalışmaz.
+        Gerçek sonuçlar için sağ üstten <strong>Yeni Tarama</strong> ile yetkili olduğun bir public IP aralığını tara.</div>
+        {% else %}
+        <p class="text-muted" style="font-size:0.85em;margin-bottom:12px;">
+            Her satırda <strong>hangi programda</strong> kullanacağın rozette yazıyor. Web servisleri butona tıklayınca açılır;
+            komutları kopyala, ilgili programa yapıştır. Yalnızca yetkili olduğun sistemlerde kullan.</p>
+        {% endif %}
+        {% for r in records %}
+            {% if r.get('_access') %}
+            <div class="connect-block">
+                <div class="connect-port">:{{ r.port }} <span class="text-muted">{{ r.service or r.protocol }}</span>
+                    {% if not is_demo %}
+                    <button class="access-btn verify-btn" style="margin-top:8px;"
+                            onclick="verifyAccess('{{ ip }}', {{ r.port }}, '{{ r.service }}', this)">&#9889; Doğrula</button>
+                    {% endif %}
+                </div>
+                <div class="connect-methods">
+                    {% for m in r._access %}
+                    <div class="connect-method">
+                        <div class="connect-method-head">
+                            {% if m.openable and not is_demo %}
+                            <a href="{{ m.value }}" target="_blank" rel="noopener" class="access-btn access-open">&#128279; {{ m.label }}</a>
+                            {% else %}
+                            <button class="access-btn" onclick="copyToClipboard('{{ m.value }}')">&#128203; {{ m.label }}</button>
+                            {% endif %}
+                            {% if m.tool %}<span class="tool-badge tool-badge-lg">{{ m.tool }}</span>{% endif %}
+                        </div>
+                        <code class="connect-value">{{ m.value }}</code>
+                        {% if m.hint %}<div class="connect-hint">{{ m.hint }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- Technologies -->
+    {% set all_techs = [] %}
+    {% for r in records %}
+        {% if r.get('technologies') %}
+            {% for t in r.technologies %}
+                {% if t not in all_techs %}
+                    {% if all_techs.append(t) %}{% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+    {% if all_techs %}
+    <div class="section-card">
+        <h3>{{ t('detail.technologies') }}</h3>
+        <div class="tech-tags">
+            {% for tech in all_techs %}
+            <span class="tech-tag">{{ tech }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Vulnerabilities -->
+    {% set all_cves = [] %}
+    {% for r in records %}
+        {% if r.get('cves') %}
+            {% for c in r.cves %}
+                {% if c not in all_cves %}
+                    {% if all_cves.append(c) %}{% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+    {% if all_cves %}
+    <div class="section-card">
+        <h3>{{ t('detail.vulns') }}</h3>
+        <table class="data-table">
+            <thead>
+                <tr><th>CVE</th><th>Severity</th><th>Score</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+                {% for c in all_cves %}
+                <tr>
+                    <td><code>{{ c.id if c.id is defined else c.get('id', '') }}</code></td>
+                    <td>
+                        {% set sev = c.severity if c.severity is defined else c.get('severity', '') %}
+                        <span class="badge {% if sev == 'CRITICAL' %}badge-error{% elif sev == 'HIGH' %}badge-warning{% else %}badge-info{% endif %}">{{ sev }}</span>
+                    </td>
+                    <td>{{ c.score if c.score is defined else c.get('score', '') }}</td>
+                    <td>{{ c.description if c.description is defined else c.get('description', '') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}OmniCrawler - İnternet Keşfi{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>🌐 OmniCrawler (Otonom Keşif Motoru)</h1>
+    <p class="text-muted">Tıpkı Shodan veya Censys'in yaptığı gibi, arka planda tüm interneti tarar ve veritabanınızı doldurur.</p>
+</div>
+
+<div class="row">
+    <div class="card" style="flex: 2;">
+        <h2>Crawler Kontrol Paneli</h2>
+        <p>OmniCrawler, genel (public) IPv4 adreslerini rastgele üreterek otonom bir şekilde tarar. Kameralar, veritabanları, sunucular ve web siteleri bulduğunda kendi yerel arama motorunuza kaydeder.</p>
+        
+        <div class="warning-banner" style="background: rgba(255, 171, 0, 0.1); border-left: 4px solid #ffab00; padding: 15px; border-radius: 4px; margin: 20px 0;">
+            <strong>⚠️ Yasal Uyarı ve Sorumluluk:</strong> Rastgele genel IP adreslerini taramak (özellikle ev veya ofis internet bağlantıları üzerinden) internet servis sağlayıcınız tarafından şüpheli veya zararlı aktivite olarak algılanabilir. Lütfen bu özelliği kullanırken dikkatli olun.
+        </div>
+
+        <div style="margin-top: 30px; display: flex; gap: 15px;">
+            <button id="btnStart" class="btn btn-primary" onclick="startCrawler()" {% if crawler_status.running %}style="display:none;"{% endif %}>🚀 Tarayıcıyı Başlat</button>
+            <button id="btnStop" class="btn btn-danger" onclick="stopCrawler()" {% if not crawler_status.running %}style="display:none;"{% endif %}>🛑 Tarayıcıyı Durdur</button>
+        </div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+        <h2>Canlı Durum</h2>
+        <div class="stats-grid" style="grid-template-columns: 1fr;">
+            <div class="stat-box">
+                <div class="stat-value" id="stat-status">
+                    {% if crawler_status.running %}
+                    <span style="color: #00e676;">Çalışıyor</span>
+                    {% else %}
+                    <span style="color: #ff5252;">Durdu</span>
+                    {% endif %}
+                </div>
+                <div class="stat-label">Sistem Durumu</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-target">{{ crawler_status.current_target or '-' }}</div>
+                <div class="stat-label">Mevcut Hedef (CIDR)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-scanned">{{ crawler_status.ips_scanned }}</div>
+                <div class="stat-label">Taranan IP Sayısı</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-found">{{ crawler_status.devices_found }}</div>
+                <div class="stat-label">Keşfedilen Cihaz</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-speed">{{ crawler_status.ips_per_second }}</div>
+                <div class="stat-label">Hız (IP/sn)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let pollInterval;
+
+    function startCrawler() {
+        fetch('/api/crawler/start', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('btnStart').style.display = 'none';
+                document.getElementById('btnStop').style.display = 'inline-block';
+                pollStatus();
+            });
+    }
+
+    function stopCrawler() {
+        fetch('/api/crawler/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('btnStop').style.display = 'none';
+                document.getElementById('btnStart').style.display = 'inline-block';
+            });
+    }
+
+    function updateUI(status) {
+        if (status.running) {
+            document.getElementById('stat-status').innerHTML = '<span style="color: #00e676;">Çalışıyor</span>';
+            document.getElementById('btnStart').style.display = 'none';
+            document.getElementById('btnStop').style.display = 'inline-block';
+        } else {
+            document.getElementById('stat-status').innerHTML = '<span style="color: #ff5252;">Durdu</span>';
+            document.getElementById('btnStop').style.display = 'none';
+            document.getElementById('btnStart').style.display = 'inline-block';
+        }
+
+        document.getElementById('stat-target').innerText = status.current_target || '-';
+        document.getElementById('stat-scanned').innerText = status.ips_scanned;
+        document.getElementById('stat-found').innerText = status.devices_found;
+        document.getElementById('stat-speed').innerText = status.ips_per_second;
+    }
+
+    function pollStatus() {
+        fetch('/api/crawler/status')
+            .then(res => res.json())
+            .then(status => {
+                updateUI(status);
+                if (status.running) {
+                    setTimeout(pollStatus, 2000);
+                }
+            });
+    }
+
+    // İlk yüklemede çalışıyorsa pollemeye başla
+    {% if crawler_status.running %}
+    pollStatus();
+    {% endif %}
+</script>
+{% endblock %}

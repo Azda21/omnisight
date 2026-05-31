@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Monitor{% endblock %}
+
+{% block content %}
+<div class="monitor-page">
+    <h1>{{ t('monitor.title') }}</h1>
+    <p class="text-muted">Schedule recurring scans. Each run auto-diffs against the previous one, so drift surfaces on the Diff page.</p>
+
+    <div class="section-card">
+        <h3>New Monitor</h3>
+        <form id="scheduleForm" onsubmit="addSchedule(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Target</label>
+                    <input type="text" id="schedTargets" placeholder="192.168.1.0/24" required>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="schedName" placeholder="Optional">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Ports</label>
+                <input type="text" id="schedPorts" value="21-23,25,53,80,110,443,993,3306,3389,5432,8080,8443">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Interval</label>
+                    <select id="schedInterval">
+                        <option value="300">Every 5 minutes</option>
+                        <option value="900">Every 15 minutes</option>
+                        <option value="3600" selected>Every hour</option>
+                        <option value="21600">Every 6 hours</option>
+                        <option value="86400">Daily</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Scan Mode</label>
+                    <select id="schedMode">
+                        <option value="auto">Auto</option>
+                        <option value="syn">SYN</option>
+                        <option value="connect">Connect</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Monitor</button>
+        </form>
+    </div>
+
+    <div class="section-card">
+        <h3>Active Monitors</h3>
+        <div id="schedulesList" class="table-wrap">
+            <p class="text-muted text-center">Loading...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadSchedules);
+
+async function loadSchedules() {
+    const resp = await fetch('/api/schedules');
+    const schedules = await resp.json();
+    const container = document.getElementById('schedulesList');
+    if (!schedules.length) {
+        container.innerHTML = '<p class="text-muted text-center">No monitors yet.</p>';
+        return;
+    }
+    let html = '<table class="data-table"><thead><tr><th>Name</th><th>Target</th><th>Interval</th><th>Runs</th><th>Last</th><th>Next</th><th>Status</th><th></th></tr></thead><tbody>';
+    schedules.forEach(s => {
+        const mins = (s.interval_seconds / 60).toFixed(0);
+        const statusBadge = s.enabled ? '<span class="badge badge-success">active</span>' : '<span class="badge badge-error">paused</span>';
+        html += `<tr>
+            <td>${s.name}</td>
+            <td><code>${s.targets}</code></td>
+            <td>${mins}m</td>
+            <td>${s.run_count}</td>
+            <td class="text-muted">${s.last_run_human}</td>
+            <td class="text-muted">${s.next_run_human}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <button class="btn btn-outline btn-xs" onclick="toggleSchedule('${s.id}', ${!s.enabled})">${s.enabled ? 'Pause' : 'Resume'}</button>
+                <button class="btn btn-outline btn-xs" onclick="deleteSchedule('${s.id}')">Delete</button>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function addSchedule(e) {
+    e.preventDefault();
+    const params = new URLSearchParams({
+        targets: document.getElementById('schedTargets').value,
+        ports: document.getElementById('schedPorts').value,
+        interval_seconds: document.getElementById('schedInterval').value,
+        scan_mode: document.getElementById('schedMode').value,
+        name: document.getElementById('schedName').value,
+    });
+    await fetch(`/api/schedule?${params}`, { method: 'POST' });
+    document.getElementById('scheduleForm').reset();
+    loadSchedules();
+}
+
+async function toggleSchedule(id, enabled) {
+    await fetch(`/api/schedule/${id}/toggle?enabled=${enabled}`, { method: 'POST' });
+    loadSchedules();
+}
+
+async function deleteSchedule(id) {
+    await fetch(`/api/schedule/${id}`, { method: 'DELETE' });
+    loadSchedules();
+}
+</script>
+{% endblock %}

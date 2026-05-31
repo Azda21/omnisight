@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="hero">
+        <h1>OmniSight</h1>
+        <p class="subtitle">{{ t('home.subtitle') }}</p>
+
+        <div class="mode-toggle">
+            <button id="easyTab" class="mode-btn active" onclick="setMode('easy')">{{ t('mode.easy') }}</button>
+            <button id="advancedTab" class="mode-btn" onclick="setMode('advanced')">{{ t('mode.advanced') }}</button>
+        </div>
+
+        <div class="search-box-large">
+            <form action="/search" method="get">
+                <div class="search-input-wrapper">
+                    <input type="text" id="mainSearch" name="q"
+                           placeholder="{{ t('home.search_ph') }}"
+                           autocomplete="off">
+                    <button type="submit" class="btn btn-primary">{{ t('btn.search') }}</button>
+                </div>
+
+                <!-- EASY MODE: one-click device categories -->
+                <div id="easyHints" class="category-grid">
+                    {% for cat in categories %}
+                    <button type="button" class="category-chip" onclick="searchCategory('{{ cat.key }}')"
+                            title="{{ cat.description }}">
+                        <span class="cat-icon">{{ cat.icon }}</span>
+                        <span class="cat-label">{{ cat.label }}</span>
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <!-- ADVANCED MODE: full DSL reference -->
+                <div id="advancedHints" class="advanced-hints" style="display:none;">
+                    <div class="dsl-hint-row">
+                        <span class="hint" onclick="searchHint('port:443 country:TR')">port:443 country:TR</span>
+                        <span class="hint" onclick="searchHint('product:nginx vuln:true')">product:nginx vuln:true</span>
+                        <span class="hint" onclick="searchHint('service:modbus')">service:modbus</span>
+                        <span class="hint" onclick="searchHint('cat:camera country:TR -service:rtsp')">cat:camera -service:rtsp</span>
+                        <span class="hint" onclick="searchHint('anon:true')">anon:true</span>
+                    </div>
+                    <details class="dsl-reference">
+                        <summary>Filter reference</summary>
+                        <div class="dsl-grid">
+                            <div><code>port:</code> port number</div>
+                            <div><code>country:</code> / <code>cc:</code> ISO code (TR, US)</div>
+                            <div><code>service:</code> ssh, http, rtsp, modbus...</div>
+                            <div><code>product:</code> nginx, Hikvision, OpenSSH...</div>
+                            <div><code>org:</code> AS organisation</div>
+                            <div><code>os:</code> operating system guess</div>
+                            <div><code>cat:</code> camera, router, database, ics...</div>
+                            <div><code>vuln:true</code> has known CVEs</div>
+                            <div><code>ssl:weak</code> weak TLS</div>
+                            <div><code>anon:true</code> anonymous access</div>
+                            <div><code>honeypot:true</code> likely honeypot</div>
+                            <div><code>-field:value</code> exclude</div>
+                            <div><code>"exact phrase"</code> quoted literal</div>
+                        </div>
+                    </details>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <button onclick="openRangeScan()" class="btn btn-primary">&#128269; Aralık Tara (public IP)</button>
+        <button onclick="startContinuous()" class="btn btn-outline">&#128260; Sürekli Tarama Kur</button>
+        <button onclick="clearDemo()" class="btn btn-outline">&#128465; Örnek Verileri Temizle</button>
+    </div>
+    <p class="scope-note">&#9888; Yalnızca <strong>yetkili olduğun</strong> hedefleri tara. İzinsiz tarama birçok ülkede yasa dışıdır.</p>
+
+    {% if not stats.get('total_records') %}
+    <div class="empty-state" id="emptyState">
+        <div class="empty-icon">&#128269;</div>
+        <h3>Henüz veri yok</h3>
+        <p>OmniSight, <strong>verdiğin public IP aralıklarını</strong> tarayıp indeksler. Bir aralık tara,
+        bulduğu her şey burada aranabilir hale gelir. Önce nasıl göründüğünü görmek için örnek veri yükleyebilirsin.</p>
+        <div class="empty-actions">
+            <button onclick="openRangeScan()" class="btn btn-primary">&#128269; Aralık Tara</button>
+            <button onclick="seedDemo()" class="btn btn-outline">Örnek Veri Yükle</button>
+        </div>
+        <p class="text-muted" style="margin-top:10px;font-size:0.8em;">Örnek veri 28 gerçekçi cihaz içerir
+        (kamera, router, veritabanı, ICS...). Sonra <code>camera</code>, <code>router</code>,
+        <code>country:TR</code>, <code>vuln:true</code> aramayı dene.</p>
+    </div>
+    {% endif %}
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('total_records', 0) | default(0) }}</div>
+            <div class="stat-label">{{ t('stat.total_records') }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('unique_hosts', 0) | default(0) }}</div>
+            <div class="stat-label">{{ t('stat.unique_hosts') }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('top_services', {}) | length }}</div>
+            <div class="stat-label">{{ t('stat.services') }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('top_countries', {}) | length }}</div>
+            <div class="stat-label">{{ t('stat.countries') }}</div>
+        </div>
+    </div>
+
+    {% if stats.get('top_services') %}
+    <div class="section-grid">
+        <div class="section-card">
+            <h3>Top Services</h3>
+            <div class="bar-chart">
+                {% for service, count in stats.get('top_services', {}).items() %}
+                <div class="bar-item">
+                    <span class="bar-label">{{ service }}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (count / stats.total_records * 100) | round(1) }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="section-card">
+            <h3>Top Ports</h3>
+            <div class="bar-chart">
+                {% for port, count in stats.get('top_ports', {}).items() %}
+                <div class="bar-item">
+                    <span class="bar-label">{{ port }}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (count / stats.total_records * 100) | round(1) }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="section-grid">
+        <div class="section-card">
+            <h3><span class="live-dot"></span> Canlı Akış</h3>
+            <div id="liveFeed" class="live-feed">
+                <p class="text-muted text-center" style="font-size:0.85em;">Tarama başlayınca bulgular buraya anlık akacak...</p>
+            </div>
+        </div>
+        <div class="section-card">
+            <h3>🎯 En Riskli Cihazlar</h3>
+            <div id="riskTop" class="table-wrap">
+                <p class="text-muted text-center" style="font-size:0.85em;">...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <h3>{{ t('home.recent_scans') }}</h3>
+        <div id="recentScans" class="table-wrap">
+            <p class="text-muted text-center">...</p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadRecentScans();
+    loadRiskTop();
+    connectLiveFeed();
+});
+
+async function loadRiskTop() {
+    try {
+        const ranked = await (await fetch('/api/risk/top?limit=10')).json();
+        const c = document.getElementById('riskTop');
+        if (!ranked.length) { c.innerHTML = '<p class="text-muted text-center" style="font-size:0.85em;">Henüz veri yok</p>'; return; }
+        let html = '<table class="data-table"><tbody>';
+        ranked.forEach(h => {
+            html += `<tr>
+                <td><a href="/host/${h.ip}"><code>${h.ip}</code></a></td>
+                <td>${h.services} servis</td>
+                <td><span class="badge risk-${h.severity}">${h.severity_label} ${h.score}</span></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        c.innerHTML = html;
+    } catch(e) {}
+}
+
+function connectLiveFeed() {
+    const feed = document.getElementById('liveFeed');
+    if (!feed) return;
+    let proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    let ws;
+    try { ws = new WebSocket(`${proto}://${location.host}/ws/feed`); }
+    catch(e) { return; }
+
+    ws.onmessage = (msg) => {
+        const ev = JSON.parse(msg.data);
+        const time = new Date(ev.ts * 1000).toLocaleTimeString();
+        let line = '';
+        if (ev.type === 'found') {
+            const sevColor = {critical:'#fca5a5',high:'#fcd34d',medium:'#93c5fd',low:'#6ee7b7'}[ev.severity] || '#94a3b8';
+            line = `<span class="feed-time">${time}</span> 🔍 <a href="/host/${ev.ip}"><code>${ev.ip}:${ev.port}</code></a> ${ev.service||''} ${ev.product||''} <span style="color:${sevColor}">risk ${ev.risk}</span>`;
+        } else if (ev.type === 'access') {
+            const icon = {open:'🔓',anonymous:'🔓',default_creds:'🔑'}[ev.level] || '⚡';
+            line = `<span class="feed-time">${time}</span> ${icon} <a href="/host/${ev.ip}"><code>${ev.ip}:${ev.port}</code></a> <span style="color:#fca5a5">${ev.summary}</span>`;
+        } else { return; }
+        const div = document.createElement('div');
+        div.className = 'feed-line';
+        div.innerHTML = line;
+        if (feed.querySelector('.text-muted')) feed.innerHTML = '';
+        feed.prepend(div);
+        while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+    };
+    ws.onclose = () => { setTimeout(connectLiveFeed, 5000); };
+}
+
+async function seedDemo() {
+    const btn = event.target;
+    btn.textContent = 'Yükleniyor...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/demo/seed', { method: 'POST' });
+        const data = await resp.json();
+        showToast(`${data.seeded} örnek cihaz yüklendi`);
+        setTimeout(() => window.location.reload(), 800);
+    } catch (e) {
+        btn.textContent = 'Hata - tekrar dene';
+        btn.disabled = false;
+    }
+}
+
+async function loadRecentScans() {
+    try {
+        const resp = await fetch('/api/sessions');
+        const sessions = await resp.json();
+        const container = document.getElementById('recentScans');
+        if (!sessions.length) {
+            container.innerHTML = '<p class="text-muted text-center">No scans yet. Start your first scan!</p>';
+            return;
+        }
+        let html = '<table class="data-table"><thead><tr><th>Name</th><th>Targets</th><th>Status</th><th>Found</th><th>Time</th></tr></thead><tbody>';
+        sessions.slice(0, 10).forEach(s => {
+            const statusClass = s.status === 'completed' ? 'badge-success' : s.status === 'running' ? 'badge-warning' : 'badge-error';
+            const duration = s.end_time ? ((s.end_time - s.start_time)).toFixed(1) + 's' : '-';
+            html += `<tr>
+                <td>${s.name || '-'}</td>
+                <td><code>${s.targets}</code></td>
+                <td><span class="badge ${statusClass}">${s.status}</span></td>
+                <td>${s.open_ports_found || 0}</td>
+                <td>${duration}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e) {
+        document.getElementById('recentScans').innerHTML = '<p class="text-muted">Could not load sessions</p>';
+    }
+}
+</script>
+{% endblock %}

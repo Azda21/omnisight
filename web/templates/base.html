@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OmniSight{% endblock %} - Network Intelligence</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/">
+                <span class="logo-icon">&#9678;</span>
+                <span class="logo-text">OmniSight</span>
+            </a>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">{{ t('nav.dashboard') }}</a>
+            <a href="/search" class="nav-link">{{ t('nav.search') }}</a>
+            <a href="/diff" class="nav-link">{{ t('nav.compare') }}</a>
+            <a href="/monitor" class="nav-link">{{ t('nav.monitor') }}</a>
+            <a href="/crawler" class="nav-link">🌐 OmniCrawler (Keşif)</a>
+            <a href="/stats" class="nav-link">{{ t('nav.stats') }}</a>
+            <a href="javascript:void(0)" class="nav-link" onclick="openSettings()">{{ t('nav.api') }}</a>
+        </div>
+        <div class="nav-actions">
+            <div class="lang-toggle">
+                <a href="/set-lang?lang=tr" class="lang-btn {% if lang() == 'tr' %}active{% endif %}">TR</a>
+                <a href="/set-lang?lang=en" class="lang-btn {% if lang() == 'en' %}active{% endif %}">EN</a>
+            </div>
+            <button onclick="openScanModal()" class="btn btn-primary btn-sm">{{ t('nav.new_scan') }}</button>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scan Modal -->
+    <div id="scanModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>{{ t('scan.title') }}</h3>
+                <button onclick="closeScanModal()" class="modal-close">&times;</button>
+            </div>
+            <form id="scanForm" onsubmit="startScan(event)">
+                <div class="form-group">
+                    <label>{{ t('scan.target') }}</label>
+                    <input type="text" id="scanTarget" name="targets" placeholder="Public IP / aralık (ör. 45.33.0.0/24)" required>
+                </div>
+                <div class="form-group">
+                    <label>{{ t('scan.ports') }}</label>
+                    <input type="text" id="scanPorts" name="ports" value="21-23,25,53,80,110,443,993,3306,3389,5432,8080,8443">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>{{ t('scan.protocol') }}</label>
+                        <select id="scanProtocol" name="protocol">
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('scan.mode') }}</label>
+                        <select id="scanMode" name="scan_mode">
+                            <option value="auto">Auto (SYN if privileged)</option>
+                            <option value="syn">SYN (stateless, fast)</option>
+                            <option value="connect">Connect (no privileges)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>{{ t('scan.name') }}</label>
+                    <input type="text" id="scanName" name="name" placeholder="{{ t('scan.optional') }}">
+                </div>
+                <div class="form-group">
+                    <label>{{ t('scan.presets') }} <span class="text-muted">{{ t('scan.presets_hint') }}</span></label>
+                    <div id="presetButtons" class="preset-buttons">
+                        <button type="button" onclick="setPreset('quick')" class="btn btn-outline btn-xs">Quick</button>
+                        <button type="button" onclick="setPreset('full')" class="btn btn-outline btn-xs">Full (1-65535)</button>
+                        <!-- device category presets injected here -->
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">{{ t('scan.start') }}</button>
+            </form>
+            <div id="scanProgress" style="display:none;">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <p id="scanStatus" class="text-center text-muted"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings (API keys) Modal -->
+    <div id="settingsModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🌐 Küresel Arama — API Anahtarları</h3>
+                <button onclick="closeSettings()" class="modal-close">&times;</button>
+            </div>
+            <p class="text-muted" style="font-size:0.85em;margin-bottom:16px;">
+                Bu anahtarlarla "camera", "country:TR" gibi aramalar <strong>tüm internetten</strong> sonuç döndürür.
+                Anahtarlar bu makinede yerel saklanır (data/secrets.json).
+            </p>
+            <div class="form-group">
+                <label>Shodan API Key <span class="text-muted">— account.shodan.io (ücretsiz)</span></label>
+                <input type="text" id="shodanKey" placeholder="Shodan anahtarını yapıştır">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Censys API ID</label>
+                    <input type="text" id="censysId" placeholder="search.censys.io">
+                </div>
+                <div class="form-group">
+                    <label>Censys API Secret</label>
+                    <input type="text" id="censysSecret" placeholder="Secret">
+                </div>
+            </div>
+            <button onclick="saveSettings()" class="btn btn-primary btn-block">Kaydet</button>
+            <div id="settingsStatus" class="text-muted text-center" style="margin-top:10px;font-size:0.85em;"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

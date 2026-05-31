@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Statistics{% endblock %}
+
+{% block content %}
+<div class="stats-page">
+    <h1>{{ t('nav.stats') }}</h1>
+
+    <div class="stats-grid">
+        <div class="stat-card stat-card-lg">
+            <div class="stat-value">{{ stats.get('total_records', 0) }}</div>
+            <div class="stat-label">Total Scan Records</div>
+        </div>
+        <div class="stat-card stat-card-lg">
+            <div class="stat-value">{{ stats.get('unique_hosts', 0) }}</div>
+            <div class="stat-label">Unique Hosts</div>
+        </div>
+    </div>
+
+    <div class="section-grid">
+        {% if stats.get('top_services') %}
+        <div class="section-card">
+            <h3>Services Distribution</h3>
+            <div class="bar-chart">
+                {% set max_count = stats.top_services.values() | max if stats.top_services else 1 %}
+                {% for service, count in stats.top_services.items() %}
+                <div class="bar-item">
+                    <span class="bar-label"><a href="/search?service={{ service }}">{{ service }}</a></span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (count / max_count * 100) | round(1) }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if stats.get('top_ports') %}
+        <div class="section-card">
+            <h3>Port Distribution</h3>
+            <div class="bar-chart">
+                {% set max_count = stats.top_ports.values() | max if stats.top_ports else 1 %}
+                {% for port, count in stats.top_ports.items() %}
+                <div class="bar-item">
+                    <span class="bar-label"><a href="/search?port={{ port }}">{{ port }}</a></span>
+                    <div class="bar-track">
+                        <div class="bar-fill bar-fill-alt" style="width: {{ (count / max_count * 100) | round(1) }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if stats.get('top_countries') %}
+        <div class="section-card">
+            <h3>Country Distribution</h3>
+            <div class="bar-chart">
+                {% set max_count = stats.top_countries.values() | max if stats.top_countries else 1 %}
+                {% for country, count in stats.top_countries.items() %}
+                <div class="bar-item">
+                    <span class="bar-label"><a href="/search?country={{ country }}">{{ country }}</a></span>
+                    <div class="bar-track">
+                        <div class="bar-fill bar-fill-green" style="width: {{ (count / max_count * 100) | round(1) }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
