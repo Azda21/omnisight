@@ -1,0 +1,43 @@
+<!-- Simple frontend control panel (static). For demo only. -->
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Omnisight V2 - Control</title>
+    <style>
+      body{font-family:Inter,Segoe UI,Arial;margin:20px;background:#0b1020;color:#e6eef8}
+      .panel{background:#0f1724;padding:20px;border-radius:8px;max-width:900px}
+      button{padding:10px 14px;margin:6px;background:#2563eb;color:white;border:none;border-radius:6px}
+      input{padding:8px;border-radius:6px;border:1px solid #1f2937;background:#07102a;color:white}
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h2>Omnisight V2 - Control Panel</h2>
+      <div>
+        <input id="target" placeholder="example.com or 1.2.3.4" />
+        <button onclick="startScan()">Tek Tıkla Tara</button>
+        <button onclick="liveScan()">Canlı Tara</button>
+      </div>
+      <pre id="out" style="margin-top:12px;background:#071228;padding:12px;border-radius:6px;min-height:120px"></pre>
+    </div>
+
+    <script>
+      async function startScan(){
+        const t = document.getElementById('target').value || 'example.com'
+        const res = await fetch('/api/scan',{
+          method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({target:t,aggressive:true})
+        })
+        const j = await res.json()
+        document.getElementById('out').innerText = JSON.stringify(j,null,2)
+      }
+      async function liveScan(){
+        const t = document.getElementById('target').value || 'example.com'
+        const res = await fetch(`/api/live_scan?domain=${encodeURIComponent(t)}`)
+        const j = await res.json()
+        document.getElementById('out').innerText = JSON.stringify(j,null,2)
+      }
+    </script>
+  </body>
+</html>
